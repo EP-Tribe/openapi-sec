@@ -1,0 +1,15 @@
+{
+  "url": "https://modules-manager.izigloo.com/swagger/api-doc-v2",
+  "ratelimit": "50",
+  "ratelimit_whitelist": "127.0.0.1",
+  "restricted_endpoints":[
+    {
+      "path": "/v1/logs",
+      "ip_allowed": "x.x.x.x"
+    },
+    {
+      "path": "/v1/cache",
+      "ip_allowed": "x.x.x.x,x.x.x.x/x"
+    }
+  ]
+}
