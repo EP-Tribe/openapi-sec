@@ -1,5 +1,5 @@
 {
-  "url": "https://modules-manager.izigloo.com/swagger/api-doc-v2",
+  "url": "https://service-hdc.izigloo.com/swagger/api-doc-v2",
   "ratelimit": "50",
   "ratelimit_whitelist": "127.0.0.1",
   "restricted_endpoints":[
