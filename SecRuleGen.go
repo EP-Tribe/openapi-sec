@@ -8,16 +8,16 @@ import (
 	"encoding/json"
 	)
 
-type RestrictedEndpoint struct {
-    Path string `json:"path"`
-    IpAllowed string `json:"ip_allowed"`
-}
-
 type Config struct {
     Url string `json:"url"`
     Ratelimit string `json:"ratelimit"`
     RatelimiteWhitelist string `json:"ratelimit_whitelist"`
     RestrictedEndpoints []RestrictedEndpoint `json:"restricted_endpoints"`
+}
+
+type RestrictedEndpoint struct {
+    Path string `json:"path"`
+    IpAllowed string `json:"ip_allowed"`
 }
 
 type Endpoint struct {
