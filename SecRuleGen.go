@@ -114,19 +114,30 @@ func generateRules(e []Endpoint, c Config ) []string {
         return rules
     }
     fmt.Println(outputStyle)
-    rules = append(rules, generateLocationBlockHeader(e[0], outputStyle))
+    rules = append(rules, generateLocationBlockHeader(e[10], outputStyle))
     return rules
 }
 
 func generateLocationBlockHeader(e Endpoint, s string) string{
     var locationBlockHeader string
     var url string
+    // a exporter dans une fonction dédiée
     if strings.ContainsAny("{", e.Url) == true {
         parameterInUrl := e.Url[strings.Index(e.Url, "{")+1:strings.Index(e.Url, "}")]
-        fmt.Println("param : ", parameterInUrl)
-        url = e.Url[0:strings.Index(e.Url, "{")]  + e.Url[strings.Index(e.Url, "}"):]
+        var parmaterTypeInUrl string
+        for _, method := range e.Methods {
+            for _, parameter := range method.Parameters {
+                if parameter.Name == parameterInUrl {
+                    parmaterTypeInUrl = parameter.Type
+                }
+            }
+        }
+        url = e.Url[0:strings.Index(e.Url, "{")] + typeToRegex(parmaterTypeInUrl) + e.Url[strings.Index(e.Url, "}")+1:]
         fmt.Println("url : ", url)
+    } else {
+        url = e.Url
     }
+    // _
     if s == "apache" {
         locationBlockHeader = ""
     }
@@ -142,14 +153,14 @@ func typeToRegex(t string) string{
     case "number":
         return "[+-]?[0-9\\.,]*"
     case "string":
-        return ".*"
+        return "[^/]*"
     default:
         return ""
     }
 }
 
 func main() {
-	config := readConfigFile("C:\\Users\\gilles.h\\Documents\\swagger-sec\\test2.json")
+	config := readConfigFile("C:\\Users\\joanelis\\Documents\\swagger-sec\\test2.json")
 //    if len(os.Args) != 2 {
 //        fmt.Fprintf(os.Stderr, "Usage: %s config.json\n", os.Args[0])
 //        os.Exit(1)
