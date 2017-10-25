@@ -1,16 +1,16 @@
 {
-  "url": "https://service-hdc.izigloo.com/swagger/api-doc-v2",
+  "url": "https://live-api.letmc.com/swagger/docs/v2-customer",
   "webserver": "apache",
   "ratelimit": "50",
   "ratelimit_whitelist": "127.0.0.1",
   "restricted_endpoints":[
     {
       "path": "/v1/logs",
-      "ip_allowed": "x.x.x.x"
+      "ip_allowed": "164.177.43.41"
     },
     {
       "path": "/v1/cache",
-      "ip_allowed": "x.x.x.x,x.x.x.x/x"
+      "ip_allowed": "164.177.43.41,192.168.20.0/24"
     }
   ]
 }

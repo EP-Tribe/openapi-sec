@@ -6,6 +6,7 @@ import (
 	"os"
 	"io/ioutil"
 	"encoding/json"
+    "strings"
 	)
 
 type Config struct {
@@ -13,6 +14,7 @@ type Config struct {
     Ratelimit string `json:"ratelimit"`
     RatelimiteWhitelist string `json:"ratelimit_whitelist"`
     RestrictedEndpoints []RestrictedEndpoint `json:"restricted_endpoints"`
+    WebServer string `json:"webserver"`
 }
 
 type RestrictedEndpoint struct {
@@ -85,12 +87,10 @@ func getEndpointList(s map[string]interface{}) []Endpoint {
     				switch x := v.(type) {
 						case []interface{}:
     						for _, e := range x {
-        						fmt.Println(e,"\n")
         						var p EndpointParameter
         						s, _ := json.Marshal(e)
         						json.Unmarshal(s, &p)
         						parameters = append(parameters, p)
-        						fmt.Println(p.Name)
     						}
 						default:
     						fmt.Printf("can't parse parameter %T\n", v)
@@ -104,8 +104,52 @@ func getEndpointList(s map[string]interface{}) []Endpoint {
     return list
 }
 
+func generateRules(e []Endpoint, c Config ) []string {
+    var rules []string
+    var outputStyle string
+    //var ratelimit string = c.Ratelimit
+    if c.WebServer == "apache" || c.WebServer == "nginx" {
+        outputStyle = c.WebServer
+    } else {
+        return rules
+    }
+    fmt.Println(outputStyle)
+    rules = append(rules, generateLocationBlockHeader(e[0], outputStyle))
+    return rules
+}
+
+func generateLocationBlockHeader(e Endpoint, s string) string{
+    var locationBlockHeader string
+    var url string
+    if strings.ContainsAny("{", e.Url) == true {
+        parameterInUrl := e.Url[strings.Index(e.Url, "{")+1:strings.Index(e.Url, "}")]
+        fmt.Println("param : ", parameterInUrl)
+        url = e.Url[0:strings.Index(e.Url, "{")]  + e.Url[strings.Index(e.Url, "}"):]
+        fmt.Println("url : ", url)
+    }
+    if s == "apache" {
+        locationBlockHeader = ""
+    }
+    return locationBlockHeader
+}
+
+func typeToRegex(t string) string{
+    switch t {
+    case "boolean":
+        return "[0-1]"
+    case "integer":
+        return "[+-]?[0-9]*"
+    case "number":
+        return "[+-]?[0-9\\.,]*"
+    case "string":
+        return ".*"
+    default:
+        return ""
+    }
+}
+
 func main() {
-	config := readConfigFile("C:\\Users\\gilles.huet\\Documents\\swagger-mod_security\\test.json")
+	config := readConfigFile("C:\\Users\\gilles.h\\Documents\\swagger-sec\\test2.json")
 //    if len(os.Args) != 2 {
 //        fmt.Fprintf(os.Stderr, "Usage: %s config.json\n", os.Args[0])
 //        os.Exit(1)
@@ -114,23 +158,25 @@ func main() {
     swaggerSpecs := getSwaggerSpec(config.Url).(map[string]interface{})
     fmt.Println("Version of swagger specifications : ", swaggerSpecs["swagger"], "\nParsing its content...\n")
     endpoints := getEndpointList(swaggerSpecs)
-    fmt.Println(endpoints)
-    for _, endpoint := range endpoints {
-    	fmt.Println("\nendpoint : ", endpoint.Url)
-    	for _, method := range endpoint.Methods {
-    		fmt.Println("\t\t", method.Name)
-    		fmt.Println("\t\t\tparameters : ")
-    		for _, parameter := range method.Parameters {
-    			var mappedParameters map[string]string
-    			p, _ := json.Marshal(parameter)
-    			json.Unmarshal(p, &mappedParameters)
-    			for k, v := range mappedParameters {
-    				if len(v) > 0 {
-    					fmt.Println("\t\t\t\t", k, " : ", v)
-    				}
-    			}
-    			fmt.Println("\n")
-    		}
-    	}
-    }
+    rules := generateRules(endpoints, config)
+    fmt.Println(rules)
+//    fmt.Println(endpoints)
+//    for _, endpoint := range endpoints {
+//    	fmt.Println("\nendpoint : ", endpoint.Url)
+//    	for _, method := range endpoint.Methods {
+//    		fmt.Println("\t\t", method.Name)
+//    		fmt.Println("\t\t\tparameters : ")
+//    		for _, parameter := range method.Parameters {
+//    			var mappedParameters map[string]string
+//    			p, _ := json.Marshal(parameter)
+//    			json.Unmarshal(p, &mappedParameters)
+//    			for k, v := range mappedParameters {
+//    				if len(v) > 0 {
+//    					fmt.Println("\t\t\t\t", k, " : ", v)
+//    				}
+//    			}
+//    			fmt.Println("\n")
+//    		}
+//    	}
+//    }
 }
