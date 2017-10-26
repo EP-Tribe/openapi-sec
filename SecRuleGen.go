@@ -122,8 +122,8 @@ func generateLocationBlockHeader(e Endpoint, s string) string{
     var locationBlockHeader string
     var url string
     if len(extractParamFromUrl(e.Url)) > 0 {
-        paramaterTypeInUrl := getParameterType(e, extractParamFromUrl(e.Url))
-        url = e.Url[0:strings.Index(e.Url, "{")] + typeToRegex(paramaterTypeInUrl) + e.Url[strings.Index(e.Url, "}")+1:]
+        paramaterRegex := ParameterToRegex(e, extractParamFromUrl(e.Url))
+        url = e.Url[0:strings.Index(e.Url, "{")] + paramaterRegex + e.Url[strings.Index(e.Url, "}")+1:]
         fmt.Println("url : ", url)
     } else {
         url = e.Url
@@ -134,7 +134,7 @@ func generateLocationBlockHeader(e Endpoint, s string) string{
     return locationBlockHeader
 }
 
-func getParameterType(e Endpoint, p string) string {
+func ParameterToRegex(e Endpoint, p string) string {
     for _, method := range e.Methods {
         for _, parameter := range method.Parameters {
             if parameter.Name == p {
