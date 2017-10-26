@@ -121,27 +121,35 @@ func generateRules(e []Endpoint, c Config ) []string {
 func generateLocationBlockHeader(e Endpoint, s string) string{
     var locationBlockHeader string
     var url string
-    // a exporter dans une fonction dédiée
-    if strings.ContainsAny("{", e.Url) == true {
-        parameterInUrl := e.Url[strings.Index(e.Url, "{")+1:strings.Index(e.Url, "}")]
-        var parmaterTypeInUrl string
-        for _, method := range e.Methods {
-            for _, parameter := range method.Parameters {
-                if parameter.Name == parameterInUrl {
-                    parmaterTypeInUrl = parameter.Type
-                }
-            }
-        }
-        url = e.Url[0:strings.Index(e.Url, "{")] + typeToRegex(parmaterTypeInUrl) + e.Url[strings.Index(e.Url, "}")+1:]
+    if len(extractParamFromUrl(e.Url)) > 0 {
+        paramaterTypeInUrl := getParameterType(e, extractParamFromUrl(e.Url))
+        url = e.Url[0:strings.Index(e.Url, "{")] + typeToRegex(paramaterTypeInUrl) + e.Url[strings.Index(e.Url, "}")+1:]
         fmt.Println("url : ", url)
     } else {
         url = e.Url
     }
-    // _
     if s == "apache" {
         locationBlockHeader = ""
     }
     return locationBlockHeader
+}
+
+func getParameterType(e Endpoint, p string) string {
+    for _, method := range e.Methods {
+        for _, parameter := range method.Parameters {
+            if parameter.Name == p {
+                return typeToRegex(parameter.Type)
+            }
+        }
+    }
+    return ""
+}
+
+func extractParamFromUrl (u string) string{
+    if strings.ContainsAny("{", u) == false {
+        return ""
+    }
+    return u[strings.Index(u, "{")+1:strings.Index(u, "}")]
 }
 
 func typeToRegex(t string) string{
