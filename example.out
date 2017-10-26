@@ -11,7 +11,7 @@ SecAction "phase:5,deprecatevar:ip./v1/professionnels/chantiers/count/maj-crm=10
 SecAction "phase:2,pass,setvar:ip./v1/professionnels/chantiers/count/maj-crm=+1,nolog,id:'314'"
 SecRule IP:/v1/professionnels/chantiers/count/maj-crm "@gt 100" "phase:2,pause:300,deny,setenv:RATELIMITED,skip:1,id:'315',status:400,msg:'too many request per minute',logdata:%{MATCHED_VAR}"
 SecMarker IGNORE_RATELIMIT_310
-# check arguments if
+# check arguments if method = post
 SecRule REQUEST_METHOD "!^(?:POST)$" "skipAfter:FILTER_BY_RM_668,nolog,id:'317'"
 SecRule ARGS_NAMES "!^(?:Authorization)$" "phase:2,t:none,deny,id:'316',status:400,msg:'Unrecognized argument',logdata:%{MATCHED_VAR},setenv:ARGNAMEERROR=%{MATCHED_VAR}"
 SecMarker FILTER_BY_RM_668

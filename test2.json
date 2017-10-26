@@ -1,7 +1,7 @@
 {
   "url": "https://live-api.letmc.com/swagger/docs/v2-customer",
   "webserver": "apache",
-  "ratelimit": "50",
+  "ratelimit": 50,
   "ratelimit_whitelist": "127.0.0.1",
   "restricted_endpoints":[
     {

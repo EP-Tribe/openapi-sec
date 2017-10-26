@@ -7,12 +7,15 @@ import (
 	"io/ioutil"
 	"encoding/json"
     "strings"
+    "strconv"
 	)
+
+var modsecRuleID int = 30000
 
 type Config struct {
     Url string `json:"url"`
-    Ratelimit string `json:"ratelimit"`
-    RatelimiteWhitelist string `json:"ratelimit_whitelist"`
+    Ratelimit int `json:"ratelimit"`
+    RatelimitWhitelist string `json:"ratelimit_whitelist"`
     RestrictedEndpoints []RestrictedEndpoint `json:"restricted_endpoints"`
     WebServer string `json:"webserver"`
 }
@@ -42,16 +45,7 @@ type EndpointParameter struct {
     Enum []string `json:"enum"`
 }
 
-func toJson(p interface{}) string {
-    bytes, err := json.Marshal(p)
-    if err != nil {
-        fmt.Println(err.Error())
-        os.Exit(1)
-    }
-    return string(bytes)
-}
-
-func readConfigFile(s string) Config {
+func ReadConfigFile(s string) Config {
     configFile, err := os.Open(s)
     defer configFile.Close()
     if err != nil {
@@ -64,7 +58,7 @@ func readConfigFile(s string) Config {
     return config
 }
 
-func getSwaggerSpec(s string) interface{} {
+func GetSwaggerSpec(s string) interface{} {
     response, err := http.Get(s)
     if err != nil {
         fmt.Fprintf(os.Stderr, "Err : unable to download %s\n", s)
@@ -76,7 +70,7 @@ func getSwaggerSpec(s string) interface{} {
     return swaggerSpec
 }
 
-func getEndpointList(s map[string]interface{}) []Endpoint {
+func GetEndpointList(s map[string]interface{}) []Endpoint {
     var list []Endpoint
     for endpoint, availableMethods := range s["paths"].(map[string]interface{}) {
     	var methods []Method
@@ -91,6 +85,7 @@ func getEndpointList(s map[string]interface{}) []Endpoint {
         						s, _ := json.Marshal(e)
         						json.Unmarshal(s, &p)
         						parameters = append(parameters, p)
+        						fmt.Println(p.Enum)
     						}
 						default:
     						fmt.Printf("can't parse parameter %T\n", v)
@@ -104,7 +99,7 @@ func getEndpointList(s map[string]interface{}) []Endpoint {
     return list
 }
 
-func generateRules(e []Endpoint, c Config ) []string {
+func GenerateRules(e []Endpoint, c Config ) []string {
     var rules []string
     var outputStyle string
     //var ratelimit string = c.Ratelimit
@@ -113,46 +108,132 @@ func generateRules(e []Endpoint, c Config ) []string {
     } else {
         return rules
     }
-    fmt.Println(outputStyle)
-    rules = append(rules, generateLocationBlockHeader(e[10], outputStyle))
+    for _, endpoint := range e {
+    	rules = append(rules, _GenerateLocationBlockHeader(endpoint, outputStyle))
+    	if len(_GenerateSourceIpAddrRules(endpoint, c)) > 0 {
+    		for _, r := range _GenerateSourceIpAddrRules(endpoint, c) {
+    			rules = append(rules, r)
+    		}
+    	}
+    	rules = append(rules, _GenerateMethodRule(endpoint))
+    	if len(_GenerateRatelimitRules(endpoint, c)) > 0{
+    		for _, line := range _GenerateRatelimitRules(endpoint, c) {
+    			rules = append(rules, line)
+    		}
+    	}
+    	for _, line := range _GeneratePerMethodRules(endpoint){
+    		rules = append(rules, line)
+    	}
+    	rules = append(rules, _GenerateLocationBlockFooter(outputStyle))
+    }
     return rules
 }
 
-func generateLocationBlockHeader(e Endpoint, s string) string{
+func _GeneratePerMethodRules(e Endpoint) []string {
+	var rules []string
+	for _, method := range e.Methods {
+		id := strconv.Itoa(_GetModsecRuleID())
+		rules = append(rules, "SecRule REQUEST_METHOD \"!^(?:"+ strings.ToUpper(method.Name) + ")$\" \"skipAfter:FILTER_BY_METHOD_" + id + ",nolog,id:'" + id + "'\"")
+
+		rules = append(rules, "SecMarker FILTER_BY_METHOD_" + id)
+	}
+	return rules
+}
+
+func _GenerateRatelimitRules(e Endpoint, c Config) []string {
+	var rules []string
+	if len(c.RatelimitWhitelist) == 0 || c.Ratelimit == 0 {
+		return rules
+	}
+	id := strconv.Itoa(_GetModsecRuleID())
+	rules = append(rules, "SecRule REMOTE_ADDR \"@ipMatch " + c.RatelimitWhitelist + "\" \"skipAfter:IGNORE_RATELIMIT_" + id + ",nolog,id:'" + id + "'\"")
+	rules = append(rules, "SecAction \"initcol:ip=%{REMOTE_ADDR}_%{REQUEST_HEADERS.User-Agent},pass,nolog,id:'" + strconv.Itoa(_GetModsecRuleID()) + "'\"")
+	rules = append(rules, "SecAction \"phase:5,deprecatevar:ip./v1/professionnels/chantiers/count/maj-crm=100/60,pass,nolog,id:'" + strconv.Itoa(_GetModsecRuleID()) + "'\"")
+	rules = append(rules, "SecAction \"phase:2,pass,setvar:ip./v1/professionnels/chantiers/count/maj-crm=+1,nolog,id:'" + strconv.Itoa(_GetModsecRuleID()) + "'\"")
+	rules = append(rules, "SecRule IP:/v1/professionnels/chantiers/count/maj-crm \"@gt " + strconv.Itoa(c.Ratelimit) + "\" \"phase:2,pause:300,deny,setenv:RATELIMITED,skip:1,id:'" + strconv.Itoa(_GetModsecRuleID()) + "',status:400,msg:'too many request per minute',logdata:%{MATCHED_VAR}\"")
+	rules = append(rules, "SecMarker IGNORE_RATELIMIT_" + id)
+	return rules
+}
+
+func _GenerateMethodRule(e Endpoint) string{
+	rule := "SecRule REQUEST_METHOD \"!^(?:"
+	var methods string
+	for _ , method := range e.Methods {
+		if len(methods) == 0 {
+			methods = methods + strings.ToUpper(method.Name)
+		} else {
+			methods = methods + "|" + strings.ToUpper(method.Name)
+		}
+	}
+	methods = methods + "|OPTIONS"
+	rule = rule + methods
+	rule = rule + ")$\" \"phase:2,t:none,deny,id:'" + strconv.Itoa(_GetModsecRuleID()) + "',status:405,msg:'Unauthorize method',logdata:%{REQUEST_METHOD},setenv:METHODERROR\""
+	return rule
+}
+
+func _GenerateSourceIpAddrRules(e Endpoint, c Config ) []string {
+	var rules []string
+	if len(c.RestrictedEndpoints) > 0{
+		for _, v := range c.RestrictedEndpoints {
+			if v.Path == e.Url {
+				id1 := strconv.Itoa(_GetModsecRuleID())
+				rules = append(rules, "SecRule REMOTE_ADDR \"@ipMatch " + v.IpAllowed + "\" \"id:'" + id1 + "',skipAfter:IP_IS_ALLOWED_" + id1 + ",nolog\"")
+				rules = append(rules, "SecAction \"deny,id:'" + strconv.Itoa(_GetModsecRuleID()) + "',log,msg:'IP not allowed on this endpoint',logdata:%{MATCHED_VAR}\"")
+				rules = append(rules, "SecMarker IP_IS_ALLOWED_" + id1)
+			}
+		}
+	}
+	return rules
+}
+
+func _GenerateLocationBlockHeader(e Endpoint, s string) string{
     var locationBlockHeader string
     var url string
-    if len(extractParamFromUrl(e.Url)) > 0 {
-        paramaterRegex := ParameterToRegex(e, extractParamFromUrl(e.Url))
+    if len(_ExtractParamFromUrl(e.Url)) > 0 {
+        paramaterRegex := _ParameterToRegex(e, _ExtractParamFromUrl(e.Url))
         url = e.Url[0:strings.Index(e.Url, "{")] + paramaterRegex + e.Url[strings.Index(e.Url, "}")+1:]
-        fmt.Println("url : ", url)
     } else {
         url = e.Url
     }
     if s == "apache" {
-        locationBlockHeader = ""
+        locationBlockHeader = "<LocationMatch \"^"+ url + "$\">"
+    }
+    if s == "nginx" {
+    	locationBlockHeader = "location " + url + "{ modsecurity_rules '"
     }
     return locationBlockHeader
 }
 
-func ParameterToRegex(e Endpoint, p string) string {
+func _GenerateLocationBlockFooter(s string) string {
+	var block string
+	if s == "apache" {
+		block = "</LocationMatch>"
+	}
+	if s == "nginx" {
+		block =   "';}"
+	}
+	return block
+}
+
+func _ParameterToRegex(e Endpoint, p string) string {
     for _, method := range e.Methods {
         for _, parameter := range method.Parameters {
             if parameter.Name == p {
-                return typeToRegex(parameter.Type)
+                return _TypeToRegex(parameter.Type)
             }
         }
     }
     return ""
 }
 
-func extractParamFromUrl (u string) string{
+func _ExtractParamFromUrl (u string) string{
     if strings.ContainsAny("{", u) == false {
         return ""
     }
     return u[strings.Index(u, "{")+1:strings.Index(u, "}")]
 }
 
-func typeToRegex(t string) string{
+func _TypeToRegex(t string) string{
     switch t {
     case "boolean":
         return "[0-1]"
@@ -167,35 +248,23 @@ func typeToRegex(t string) string{
     }
 }
 
+func _GetModsecRuleID() int {
+	modsecRuleID = modsecRuleID + 1
+	return modsecRuleID
+}
+
 func main() {
-	config := readConfigFile("C:\\Users\\joanelis\\Documents\\swagger-sec\\test2.json")
+	config := ReadConfigFile("C:\\Users\\gilles.huet\\Documents\\swagger-mod_security\\test.json")
 //    if len(os.Args) != 2 {
 //        fmt.Fprintf(os.Stderr, "Usage: %s config.json\n", os.Args[0])
 //        os.Exit(1)
 //    }
 //    config := readConfigFile(os.Args[1])
-    swaggerSpecs := getSwaggerSpec(config.Url).(map[string]interface{})
+    swaggerSpecs := GetSwaggerSpec(config.Url).(map[string]interface{})
     fmt.Println("Version of swagger specifications : ", swaggerSpecs["swagger"], "\nParsing its content...\n")
-    endpoints := getEndpointList(swaggerSpecs)
-    rules := generateRules(endpoints, config)
-    fmt.Println(rules)
-//    fmt.Println(endpoints)
-//    for _, endpoint := range endpoints {
-//    	fmt.Println("\nendpoint : ", endpoint.Url)
-//    	for _, method := range endpoint.Methods {
-//    		fmt.Println("\t\t", method.Name)
-//    		fmt.Println("\t\t\tparameters : ")
-//    		for _, parameter := range method.Parameters {
-//    			var mappedParameters map[string]string
-//    			p, _ := json.Marshal(parameter)
-//    			json.Unmarshal(p, &mappedParameters)
-//    			for k, v := range mappedParameters {
-//    				if len(v) > 0 {
-//    					fmt.Println("\t\t\t\t", k, " : ", v)
-//    				}
-//    			}
-//    			fmt.Println("\n")
-//    		}
-//    	}
-//    }
+    endpoints := GetEndpointList(swaggerSpecs)
+    rules := GenerateRules(endpoints, config)
+    for _, v := range rules {
+    	fmt.Println(v)
+    }
 }

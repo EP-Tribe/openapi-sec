@@ -1,7 +1,7 @@
 {
   "url": "https://service-hdc.izigloo.com/swagger/api-doc-v2",
   "webserver": "apache",
-  "ratelimit": "50",
+  "ratelimit": 50,
   "ratelimit_whitelist": "127.0.0.1",
   "restricted_endpoints":[
     {
