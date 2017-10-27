@@ -18,6 +18,7 @@ type Config struct {
     RatelimitWhitelist string `json:"ratelimit_whitelist"`
     RestrictedEndpoints []RestrictedEndpoint `json:"restricted_endpoints"`
     WebServer string `json:"webserver"`
+    Verbose bool `json:"verbose"`
 }
 
 type RestrictedEndpoint struct {
@@ -43,6 +44,25 @@ type EndpointParameter struct {
     Type string `json:"type"`
     Required bool `json:"required"`
     Enum []string `json:"enum"`
+    Schema ParameterSchema `json:"schema"`
+}
+
+type ParameterSchema struct {
+	Ref string `json:"$ref"`
+	Type string `json:"type"`
+}
+
+type Definition struct {
+	Name string
+	Type string `json:"type"`
+	Properties []PropertyDefinition `json:"properties"`
+}
+
+type PropertyDefinition struct {
+	Name string
+	Type string `json:"type"`
+	Format string `json:"format"`
+	Ref string `json:"$ref"`
 }
 
 func ReadConfigFile(s string) Config {
@@ -76,16 +96,22 @@ func GetEndpointList(s map[string]interface{}) []Endpoint {
     	var methods []Method
     	var parameters []EndpointParameter
     	for method, description := range availableMethods.(map[string]interface{}){
-    		for k, v := range description.(map[string]interface{}){
-    			if k == "parameters" {
+    		for property, v := range description.(map[string]interface{}){
+    			if property == "parameters" {
     				switch x := v.(type) {
 						case []interface{}:
     						for _, e := range x {
         						var p EndpointParameter
         						s, _ := json.Marshal(e)
         						json.Unmarshal(s, &p)
-        						parameters = append(parameters, p)
-        						fmt.Println(p.Enum)
+        						if len(p.Schema.Ref) > 0 {
+        							for _, v := range _ParseParameterDefinition(p.Name, p.Schema.Ref) {
+        								parameters = append(parameters, v)
+        							}
+        						} else {
+        							p.Type = "string"
+        							parameters = append(parameters, p)
+        						}
     						}
 						default:
     						fmt.Printf("can't parse parameter %T\n", v)
@@ -97,6 +123,28 @@ func GetEndpointList(s map[string]interface{}) []Endpoint {
     	list = append(list, Endpoint{endpoint, methods})
     }
     return list
+}
+
+func GetDefinitionList(s map[string]interface{}) []Definition {
+	var definitions []Definition
+	for name, properties := range s["definitions"].(map[string]interface{}){
+		var d Definition
+		m := properties.(map[string]interface{})
+		d.Name = "#/definitions/" + name
+		d.Type = m["type"].(string)
+		if d.Type == "object" {
+			var p PropertyDefinition
+			s, _ := json.Marshal(m["properties"])
+			json.Unmarshal(s, &p)
+			fmt.Println(m["properties"], " -> ", p)
+			for _, property := range m["properties"].(map[string]interface{}){
+				d.Properties = append (d.Properties, {property[] })
+			}
+		}
+		definitions = append(definitions, d)
+	}
+	fmt.Println(definitions)
+	return definitions
 }
 
 func GenerateRules(e []Endpoint, c Config ) []string {
@@ -127,6 +175,12 @@ func GenerateRules(e []Endpoint, c Config ) []string {
     	rules = append(rules, _GenerateLocationBlockFooter(outputStyle))
     }
     return rules
+}
+
+func _ParseParameterDefinition(n string, r string) []EndpointParameter {
+	var parameters []EndpointParameter
+
+	return parameters
 }
 
 func _GeneratePerMethodRules(e Endpoint) []string {
@@ -262,9 +316,11 @@ func main() {
 //    config := readConfigFile(os.Args[1])
     swaggerSpecs := GetSwaggerSpec(config.Url).(map[string]interface{})
     fmt.Println("Version of swagger specifications : ", swaggerSpecs["swagger"], "\nParsing its content...\n")
-    endpoints := GetEndpointList(swaggerSpecs)
-    rules := GenerateRules(endpoints, config)
-    for _, v := range rules {
-    	fmt.Println(v)
-    }
+    //endpoints := GetEndpointList(swaggerSpecs)
+    //definitions := GetDefinitionList(swaggerSpecs)
+    //rules := GenerateRules(endpoints, config)
+    GetDefinitionList(swaggerSpecs)
+//    for _, v := range rules {
+//    	fmt.Println(v)
+//    }
 }

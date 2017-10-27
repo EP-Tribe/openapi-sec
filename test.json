@@ -1,5 +1,5 @@
 {
-  "url": "https://service-hdc.izigloo.com/swagger/api-doc-v2",
+  "url": "http://moteur-geoloc.izigloo.com/swagger/api-doc-v2",
   "webserver": "apache",
   "ratelimit": 50,
   "ratelimit_whitelist": "127.0.0.1",
@@ -12,5 +12,6 @@
       "path": "/v1/cache",
       "ip_allowed": "x.x.x.x,x.x.x.x/x"
     }
-  ]
+  ],
+  "verbose": 0
 }
