@@ -8,6 +8,7 @@ import (
 	"encoding/json"
     "strings"
     "strconv"
+    //"bufio"
 	)
 
 var modsecRuleID int = 30000
@@ -20,7 +21,7 @@ type Config struct {
     WebServer string `json:"webserver"`
     Verbose bool `json:"verbose"`
 }
-
+ 
 type RestrictedEndpoint struct {
     Path string `json:"path"`
     IpAllowed string `json:"ip_allowed"`
@@ -127,7 +128,7 @@ func GetEndpointList(s map[string]interface{}) []Endpoint {
 
 func GetDefinitionList(s map[string]interface{}) []Definition {
 	var definitions []Definition
-	for name, properties := range s["definitions"].(map[string]interface{}){
+	for name, properties := range s["definitions"].(map[string]interface{}) {
 		var d Definition
 		m := properties.(map[string]interface{})
 		d.Name = "#/definitions/" + name
@@ -137,9 +138,9 @@ func GetDefinitionList(s map[string]interface{}) []Definition {
 			s, _ := json.Marshal(m["properties"])
 			json.Unmarshal(s, &p)
 			fmt.Println(m["properties"], " -> ", p)
-			for _, property := range m["properties"].(map[string]interface{}){
-				d.Properties = append (d.Properties, {property[] })
-			}
+			//for _, property := range m["properties"].(map[string]interface{}) {
+			//	d.Properties = append (d.Properties, PropertyDefinition{ "property" })
+			//}
 		}
 		definitions = append(definitions, d)
 	}
@@ -242,13 +243,9 @@ func _GenerateSourceIpAddrRules(e Endpoint, c Config ) []string {
 
 func _GenerateLocationBlockHeader(e Endpoint, s string) string{
     var locationBlockHeader string
-    var url string
-    if len(_ExtractParamFromUrl(e.Url)) > 0 {
-        paramaterRegex := _ParameterToRegex(e, _ExtractParamFromUrl(e.Url))
-        url = e.Url[0:strings.Index(e.Url, "{")] + paramaterRegex + e.Url[strings.Index(e.Url, "}")+1:]
-    } else {
-        url = e.Url
-    }
+	fmt.Println(e.Url)
+    url := _URLParameterToRegex(e)
+	fmt.Println("\t->", url)
     if s == "apache" {
         locationBlockHeader = "<LocationMatch \"^"+ url + "$\">"
     }
@@ -269,22 +266,28 @@ func _GenerateLocationBlockFooter(s string) string {
 	return block
 }
 
-func _ParameterToRegex(e Endpoint, p string) string {
-    for _, method := range e.Methods {
+func _URLParameterToRegex(e Endpoint) string {
+	buff := e
+	if strings.ContainsAny("{", buff.Url) == false {
+		return buff.Url
+	}
+	urlParameter := buff.Url[(strings.Index(buff.Url, "{"))+1:strings.Index(buff.Url, "}")]
+    for _, method := range buff.Methods {
         for _, parameter := range method.Parameters {
-            if parameter.Name == p {
-                return _TypeToRegex(parameter.Type)
+            if parameter.Name == urlParameter {
+				fmt.Println(urlParameter)
+            	fmt.Println(strings.Index(buff.Url, urlParameter))
+            	buff.Url = e.Url[:strings.Index(buff.Url, urlParameter)-1] + "("
+				buff.Url = buff.Url + _TypeToRegex(parameter.Type) + ")"
+				fmt.Println(e.Url[strings.Index(buff.Url, urlParameter):])
+				buff.Url = buff.Url + e.Url[strings.Index(buff.Url, urlParameter):]
             }
         }
     }
-    return ""
-}
-
-func _ExtractParamFromUrl (u string) string{
-    if strings.ContainsAny("{", u) == false {
-        return ""
-    }
-    return u[strings.Index(u, "{")+1:strings.Index(u, "}")]
+	if strings.ContainsAny("{", buff.Url) == true {
+		return _URLParameterToRegex(buff)
+	}
+    return buff.Url
 }
 
 func _TypeToRegex(t string) string{
@@ -308,7 +311,7 @@ func _GetModsecRuleID() int {
 }
 
 func main() {
-	config := ReadConfigFile("C:\\Users\\gilles.huet\\Documents\\swagger-mod_security\\test.json")
+	config := ReadConfigFile("C:\\Users\\joanelis\\Documents\\openapi-sec\\test3.json")
 //    if len(os.Args) != 2 {
 //        fmt.Fprintf(os.Stderr, "Usage: %s config.json\n", os.Args[0])
 //        os.Exit(1)
@@ -316,11 +319,12 @@ func main() {
 //    config := readConfigFile(os.Args[1])
     swaggerSpecs := GetSwaggerSpec(config.Url).(map[string]interface{})
     fmt.Println("Version of swagger specifications : ", swaggerSpecs["swagger"], "\nParsing its content...\n")
-    //endpoints := GetEndpointList(swaggerSpecs)
-    //definitions := GetDefinitionList(swaggerSpecs)
-    //rules := GenerateRules(endpoints, config)
-    GetDefinitionList(swaggerSpecs)
-//    for _, v := range rules {
-//    	fmt.Println(v)
-//    }
+    endpoints := GetEndpointList(swaggerSpecs)
+    definitions := GetDefinitionList(swaggerSpecs)
+    rules := GenerateRules(endpoints, config)
+    //GetDefinitionList(swaggerSpecs)
+    for _, v := range rules {
+    	fmt.Println(v)
+    }
+    fmt.Println(definitions)
 }
