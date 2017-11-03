@@ -59,7 +59,7 @@ type PropertyDefinition struct {
 	Ref string `json:"$ref"`
 }
 
-var modsecRuleID int = 30000
+var modsecRuleID = 30000
 func _GetModsecRuleID() int {
 	modsecRuleID = modsecRuleID + 1
 	return modsecRuleID
@@ -308,7 +308,7 @@ func main() {
     }
     config := ReadConfigFile(os.Args[1])
     swaggerSpecs := GetSwaggerSpec(config.Url).(map[string]interface{})
-    fmt.Println("Version of swagger specifications : ", swaggerSpecs["swagger"], "\nParsing its content...\n")
+    fmt.Println("Version of swagger specifications : ", swaggerSpecs["swagger"], "\nParsing its content...")
     endpoints := GetEndpointList(swaggerSpecs)
     definitions := GetDefinitionList(swaggerSpecs)
     rules := GenerateRules(endpoints, config)
