@@ -11,8 +11,6 @@ import (
     //"bufio"
 	)
 
-var modsecRuleID int = 30000
-
 type Config struct {
     Url string `json:"url"`
     Ratelimit int `json:"ratelimit"`
@@ -21,7 +19,6 @@ type Config struct {
     WebServer string `json:"webserver"`
     Verbose bool `json:"verbose"`
 }
- 
 type RestrictedEndpoint struct {
     Path string `json:"path"`
     IpAllowed string `json:"ip_allowed"`
@@ -31,12 +28,10 @@ type Endpoint struct {
     Url string
     Methods []Method
 }
-
 type Method struct {
 	Name string
 	Parameters []EndpointParameter
 }
-
 type EndpointParameter struct {
     Name string `json:"name"`
     In string `json:"in"`
@@ -47,7 +42,6 @@ type EndpointParameter struct {
     Enum []string `json:"enum"`
     Schema ParameterSchema `json:"schema"`
 }
-
 type ParameterSchema struct {
 	Ref string `json:"$ref"`
 	Type string `json:"type"`
@@ -58,12 +52,17 @@ type Definition struct {
 	Type string `json:"type"`
 	Properties []PropertyDefinition `json:"properties"`
 }
-
 type PropertyDefinition struct {
 	Name string
 	Type string `json:"type"`
 	Format string `json:"format"`
 	Ref string `json:"$ref"`
+}
+
+var modsecRuleID int = 30000
+func _GetModsecRuleID() int {
+	modsecRuleID = modsecRuleID + 1
+	return modsecRuleID
 }
 
 func ReadConfigFile(s string) Config {
@@ -275,12 +274,8 @@ func _URLParameterToRegex(e Endpoint) string {
     for _, method := range buff.Methods {
         for _, parameter := range method.Parameters {
             if parameter.Name == urlParameter {
-				fmt.Println(urlParameter)
-            	fmt.Println(strings.Index(buff.Url, urlParameter))
-            	buff.Url = e.Url[:strings.Index(buff.Url, urlParameter)-1] + "("
-				buff.Url = buff.Url + _TypeToRegex(parameter.Type) + ")"
-				fmt.Println(e.Url[strings.Index(buff.Url, urlParameter):])
-				buff.Url = buff.Url + e.Url[strings.Index(buff.Url, urlParameter):]
+				idx := strings.Index(buff.Url, urlParameter)
+            	buff.Url = e.Url[:idx-1] + "(" + _TypeToRegex(parameter.Type) + ")" + e.Url[idx:]
             }
         }
     }
@@ -305,24 +300,18 @@ func _TypeToRegex(t string) string{
     }
 }
 
-func _GetModsecRuleID() int {
-	modsecRuleID = modsecRuleID + 1
-	return modsecRuleID
-}
-
 func main() {
-	config := ReadConfigFile("C:\\Users\\joanelis\\Documents\\openapi-sec\\test3.json")
-//    if len(os.Args) != 2 {
-//        fmt.Fprintf(os.Stderr, "Usage: %s config.json\n", os.Args[0])
-//        os.Exit(1)
-//    }
-//    config := readConfigFile(os.Args[1])
+	//config := ReadConfigFile("C:\\Users\\joanelis\\Documents\\openapi-sec\\test3.json")
+    if len(os.Args) != 2 {
+        fmt.Fprintf(os.Stderr, "Usage: %s config.json\n", os.Args[0])
+        os.Exit(1)
+    }
+    config := ReadConfigFile(os.Args[1])
     swaggerSpecs := GetSwaggerSpec(config.Url).(map[string]interface{})
     fmt.Println("Version of swagger specifications : ", swaggerSpecs["swagger"], "\nParsing its content...\n")
     endpoints := GetEndpointList(swaggerSpecs)
     definitions := GetDefinitionList(swaggerSpecs)
     rules := GenerateRules(endpoints, config)
-    //GetDefinitionList(swaggerSpecs)
     for _, v := range rules {
     	fmt.Println(v)
     }
