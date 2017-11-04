@@ -8,8 +8,10 @@ import (
 	"encoding/json"
     "strings"
     "strconv"
+    "sort"
     //"bufio"
-	)
+	"regexp"
+)
 
 type Config struct {
     Url string `json:"url"`
@@ -122,7 +124,13 @@ func GetEndpointList(s map[string]interface{}) []Endpoint {
     	}
     	list = append(list, Endpoint{endpoint, methods})
     }
-    return list
+	testSlash := regexp.MustCompile("/")
+    sort.Slice(list, func(i, j int) bool {
+		matchesI := testSlash.FindAllStringIndex(list[i].Url, -1)
+		matchesJ := testSlash.FindAllStringIndex(list[j].Url, -1)
+    	return len(matchesI) < len(matchesJ)
+    	})
+	return list
 }
 
 func GetDefinitionList(s map[string]interface{}) []Definition {
@@ -242,9 +250,7 @@ func _GenerateSourceIpAddrRules(e Endpoint, c Config ) []string {
 
 func _GenerateLocationBlockHeader(e Endpoint, s string) string{
     var locationBlockHeader string
-	fmt.Println(e.Url)
     url := _URLParameterToRegex(e)
-	fmt.Println("\t->", url)
     if s == "apache" {
         locationBlockHeader = "<LocationMatch \"^"+ url + "$\">"
     }
@@ -270,14 +276,18 @@ func _URLParameterToRegex(e Endpoint) string {
 	if strings.ContainsAny("{", buff.Url) == false {
 		return buff.Url
 	}
-	urlParameter := buff.Url[(strings.Index(buff.Url, "{"))+1:strings.Index(buff.Url, "}")]
+	urlParameter := buff.Url[(strings.Index(buff.Url, "{")):strings.Index(buff.Url, "}")+1]
     for _, method := range buff.Methods {
         for _, parameter := range method.Parameters {
-            if parameter.Name == urlParameter {
-				idx := strings.Index(buff.Url, urlParameter)
-            	buff.Url = e.Url[:idx-1] + "(" + _TypeToRegex(parameter.Type) + ")" + e.Url[idx:]
+            if "{" + parameter.Name + "}" == urlParameter {
+				idxS := strings.Index(buff.Url, urlParameter)
+				idxE := idxS + len(urlParameter)
+            	buff.Url = e.Url[:idxS] + "(" + _TypeToRegex(parameter.Type) + ")" + e.Url[idxE:]
             }
         }
+		if strings.ContainsAny("{", buff.Url) == false {
+			break
+		}
     }
 	if strings.ContainsAny("{", buff.Url) == true {
 		return _URLParameterToRegex(buff)
@@ -300,8 +310,11 @@ func _TypeToRegex(t string) string{
     }
 }
 
+func ReplaceDefinitions (e []Endpoint, d []Definition) []Endpoint {
+	return e
+}
+
 func main() {
-	//config := ReadConfigFile("C:\\Users\\joanelis\\Documents\\openapi-sec\\test3.json")
     if len(os.Args) != 2 {
         fmt.Fprintf(os.Stderr, "Usage: %s config.json\n", os.Args[0])
         os.Exit(1)
@@ -309,11 +322,11 @@ func main() {
     config := ReadConfigFile(os.Args[1])
     swaggerSpecs := GetSwaggerSpec(config.Url).(map[string]interface{})
     fmt.Println("Version of swagger specifications : ", swaggerSpecs["swagger"], "\nParsing its content...")
-    endpoints := GetEndpointList(swaggerSpecs)
-    definitions := GetDefinitionList(swaggerSpecs)
-    rules := GenerateRules(endpoints, config)
-    for _, v := range rules {
-    	fmt.Println(v)
-    }
-    fmt.Println(definitions)
+	endpoints := ReplaceDefinitions(GetEndpointList(swaggerSpecs), GetDefinitionList(swaggerSpecs))
+	GenerateRules(endpoints, config)
+    //rules := GenerateRules(endpoints, config)
+    //for _, v := range rules {
+    //	fmt.Println(v)
+    //}
+    //fmt.Println(definitions)
 }
