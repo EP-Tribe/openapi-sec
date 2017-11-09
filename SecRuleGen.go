@@ -59,6 +59,8 @@ type PropertyDefinition struct {
 	Type string `json:"type"`
 	Format string `json:"format"`
 	Ref string `json:"$ref"`
+	Items string `json:"items"`
+	Enum []string `json:"enum"`
 }
 
 var modsecRuleID = 30000
@@ -140,18 +142,34 @@ func GetDefinitionList(s map[string]interface{}) []Definition {
 		m := properties.(map[string]interface{})
 		d.Name = "#/definitions/" + name
 		d.Type = m["type"].(string)
+		fmt.Println("Definition : ", d.Name)
 		if d.Type == "object" {
 			var p PropertyDefinition
-			s, _ := json.Marshal(m["properties"])
-			json.Unmarshal(s, &p)
-			fmt.Println(m["properties"], " -> ", p)
-			//for _, property := range m["properties"].(map[string]interface{}) {
-			//	d.Properties = append (d.Properties, PropertyDefinition{ "property" })
-			//}
+			for name, property := range m["properties"].(map[string]interface{}) {
+				p.Name = name
+				fmt.Println("\tproperty : ", name, " : ", property)
+				for k, v := range property.(map[string]interface{}) {
+					switch k {
+					case "type":
+						p.Type = v.(string)
+					case "format":
+						p.Format = v.(string)
+					//case "items":
+					//	p.Items = v.(string)
+					case "$ref":
+						p.Ref = v.(string)
+					case "enum":
+						for _, val := range v.([]interface{}){
+							p.Enum = append(p.Enum, val.(string))
+						}
+					}
+				}
+				fmt.Println("\t-> result : ", p)
+			}
+			//d.Properties = append(d.Properties, p)
 		}
 		definitions = append(definitions, d)
 	}
-	fmt.Println(definitions)
 	return definitions
 }
 
@@ -172,8 +190,8 @@ func GenerateRules(e []Endpoint, c Config ) []string {
     		}
     	}
     	rules = append(rules, _GenerateMethodRule(endpoint))
-    	if len(_GenerateRatelimitRules(endpoint, c)) > 0{
-    		for _, line := range _GenerateRatelimitRules(endpoint, c) {
+    	if len(_GenerateRatelimitRules(c)) > 0{
+    		for _, line := range _GenerateRatelimitRules(c) {
     			rules = append(rules, line)
     		}
     	}
@@ -202,7 +220,7 @@ func _GeneratePerMethodRules(e Endpoint) []string {
 	return rules
 }
 
-func _GenerateRatelimitRules(e Endpoint, c Config) []string {
+func _GenerateRatelimitRules(c Config) []string {
 	var rules []string
 	if len(c.RatelimitWhitelist) == 0 || c.Ratelimit == 0 {
 		return rules
